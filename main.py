@@ -61,6 +61,7 @@ def showAvailableStrands(linkID):
     count = 0
     colors = []
     for strandID in links[linkID]["linkedStrands"]:
+        strandID = str(strandID)
         if strands[strandID]["feederStrand"] != 0 or strands[strandID]["nextStrand"] != 0:
             continue
         count += 1
@@ -69,12 +70,7 @@ def showAvailableStrands(linkID):
     print(f"Link {links[linkID]['identity']} has {count} available strands and the colors are {colors}.")
 
 def linkFiberToNode(nodeID, linkID, linkType):
-    print(nodeID, linkID, linkType)
-    print(nodes[nodeID]["linkedFiber"])
-
     nodes[nodeID]["linkedFiber"].append(linkID)
-
-    print(nodes[nodeID]["linkedFiber"])
 
     if linkType == "backhaul":
         links[linkID]["backhaulNode"] = nodeID
@@ -100,13 +96,20 @@ def updateLinkComment(linkID, comment):
 
 ### STRANDS FN's ###
 
-def linkFiberStrands(backhaulStrandID, newStrandID):
-    # If strand already spliced, reset previous
+def linkFiberStrands(nodeID:str, backhaulStrandID:str, newStrandID:str):
+    backhaulParent = strands[backhaulStrandID]["parentLink"]
+    newParent = strands[newStrandID]["parentLink"]
+
+    if (backhaulParent not in nodes[nodeID]["linkedFiber"]) or (newParent not in nodes[nodeID]["linkedFiber"]) or (backhaulParent == newParent):
+        print('Fiber not ending in same node. Check routing.')
+        return
+
+    # If next strand already spliced, reset previous
     if strands[backhaulStrandID]["nextStrand"] != 0:
         prevStrand = strands[backhaulStrandID]["nextStrand"]
         strands[prevStrand]["feederStrand"] = 0
     
-    # If strand already spliced, reset previous
+    # If feeder strand already spliced, reset previous
     if strands[newStrandID]["feederStrand"] != 0:
         prevStrand = strands[newStrandID]["feederStrand"]
         strands[prevStrand]["nextStrand"] = 0
@@ -123,7 +126,7 @@ def linkFiberStrands(backhaulStrandID, newStrandID):
 
 ### CREATION FN's ###
 
-def createFiberNode(linkedFiber:list=[], linkedSplitters:list=[], identity="TBD", spliceCase:str="", container:str="", comment:str=""):
+def createFiberNode(linkedFiber:list=[], linkedSplitters:list=[], identity="TBD", spliceCase:str="", container:str="", signal:int=-99, comment:str=""):
     print('create node')
         # "id": random.randint(0,99999999),
     node = {
@@ -133,14 +136,14 @@ def createFiberNode(linkedFiber:list=[], linkedSplitters:list=[], identity="TBD"
         "identity": identity,
         "spliceCase": spliceCase,
         "container": container,
-        "signal": 2,
+        "signal": signal,
         "comment": comment
     }
     nodes.update({node["id"]: node})
 
     return node["id"]
 
-def createFiberLink(backhaulNode:int=0, parentNode:int=0, linkedStrands:list=[], fiberCount:int=1, identity="TBD", comment:str=""):
+def createFiberLink(backhaulNode:int=0, parentNode:int=0, linkedStrands:list=[], fiberCount:int=1, identity="TBD", distance:int=0, comment:str=""):
     print('create link')
         # "id": random.randint(0, 99999999),
     link = {
@@ -150,6 +153,7 @@ def createFiberLink(backhaulNode:int=0, parentNode:int=0, linkedStrands:list=[],
         "linkedStrands": linkedStrands[:],
         "identity": identity,
         "count": fiberCount,
+        "distance": distance,
         "comment": comment
     }
     links.update({link["id"]: link})
@@ -173,11 +177,21 @@ def createFiberStrand(parentLink:int=0, parentSplitter:int=0, feederStrand:int=0
     links[parentLink]["linkedStrands"].append(strand["id"])
 
 def calculateFiberSignal(strandID):
-    current_strand = strands[strandID]
-    while current_strand["feederStrand"] != 0:
-        current_strand = strands["feederStrand"]
+    loss = 0
+    splices = 0
 
-    print(nodes[current_strand]["signal"])
+    current = strandID
+    while int(strands[current]["feederStrand"]) != 0:
+        current = strands[current]["feederStrand"]
+        splices += 1
+
+    parentLink = strands[current]["parentLink"]
+    parentNode = links[f"{parentLink}"]["parentNode"]
+
+    startSignal = nodes[f"{parentNode}"]["signal"]
+    loss += splices * 0.5
+
+    print(f"Start of cicuit is {startSignal}db, loss is -{loss}db. Expected signal at fiber ({strands[strandID]['tube']} {strands[strandID]['color']}) is {startSignal - loss}db")
  
 
 
@@ -220,24 +234,25 @@ links = data["links"]
 strands = data["strands"]
 
 def main():
-    node_1 = createFiberNode(identity="Number 1")
-    node_2 = createFiberNode(identity="Number 2")
-    node_3 = createFiberNode(identity="Number 3")
+    # node_1 = createFiberNode(identity="Number 1", signal=2)
+    # node_2 = createFiberNode(identity="Number 2")
+    # node_3 = createFiberNode(identity="Number 3")
 
-    link_2 = createFiberLink(fiberCount=2, identity="Main")
-    link_3 = createFiberLink(fiberCount=2, identity="Sub")
+    # link_2 = createFiberLink(fiberCount=2, identity="Main")
+    # link_3 = createFiberLink(fiberCount=2, identity="Sub")
 
-    linkFiberToNode(node_1, link_2, "")
+    # linkFiberToNode(node_1, link_2, "")
 
-    linkFiberToNode(node_2, link_2, "backhaul")
-    linkFiberToNode(node_2, link_3, "")
-    linkFiberToNode(node_3, link_3, "backhaul")
+    # linkFiberToNode(node_2, link_2, "backhaul")
+    # linkFiberToNode(node_2, link_3, "")
+    # linkFiberToNode(node_3, link_3, "backhaul")
 
-    # linkFiberStrands(56923980, )
+    # linkFiberStrands("48", "31", "0")
 
-    # showAvailableStrands(hhh)
+    # showAvailableStrands("5")
 
-    # calculateFiberSignal()
+    # TODO Current just iterates back to source without calc-ing loss
+    calculateFiberSignal("0")
 
     updateDatabase()
 
